@@ -1,6 +1,6 @@
 /*!
  * Vue.js v2.4.1
- * (c) 2014-2019 Evan You
+ * (c) 2014-2020 Evan You
  * Released under the MIT License.
  */
 (function (global, factory) {
@@ -853,6 +853,12 @@ var Observer = function Observer (value, key) {
       ? protoAugment
       : copyAugment;
     augment(value, arrayMethods, arrayKeys);
+    // 微信小程序中使用插件，数组对象上会直接挂载`push、pop、sort`等方法
+    // 导致mpvue对隐式原型的覆盖无效，无法感知用户对数组的操作
+    if (hasProto) {
+      var ownMethods = hasOwnArrayMethods(value, arrayKeys);
+      ownMethods.length && copyAugment(value, arrayMethods, ownMethods);
+    }
     this.observeArray(value);
   } else {
     this.walk(value);
@@ -879,6 +885,21 @@ Observer.prototype.observeArray = function observeArray (items) {
     observe(items[i]);
   }
 };
+
+/**
+ * 判断当前数组上是否被挂载了数组方法
+ */
+function hasOwnArrayMethods (value, keys) {
+  var ownMethods = [];
+  /* eslint-disable no-proto */
+  keys.forEach(function (key) {
+    if (value[key] !== value.__proto__[key]) {
+      ownMethods.push(key);
+    }
+  });
+  /* eslint-enable no-proto */
+  return ownMethods
+}
 
 // helpers
 
@@ -924,8 +945,6 @@ function observe (value, asRootData, key) {
     !value._isVue
   ) {
     ob = new Observer(value, key);
-    ob.__keyPath = ob.__keyPath ? ob.__keyPath : {};
-    ob.__keyPath[key] = true;
   }
   if (asRootData && ob) {
     ob.vmCount++;
@@ -989,8 +1008,15 @@ function defineReactive$$1 (
       }
       childOb = !shallow && observe(newVal, undefined, key);
       dep.notify();
-      obj.__keyPath = obj.__keyPath ? obj.__keyPath : {};
+
+      if (!obj.__keyPath) {
+        def(obj, '__keyPath', {}, false);
+      }
       obj.__keyPath[key] = true;
+      if (newVal instanceof Object && !(newVal instanceof Array)) {
+        // 标记是否是通过this.Obj = {} 赋值印发的改动，解决少更新问题#1305
+        def(newVal, '__newReference', true, false);
+      }
     }
   });
 }
@@ -1025,7 +1051,7 @@ function set (target, key, val) {
   defineReactive$$1(ob.value, key, val);
   // Vue.set 添加对象属性，渲染时候把 val 传给小程序渲染
   if (!target.__keyPath) {
-    target.__keyPath = {};
+    def(target, '__keyPath', {}, false);
   }
   target.__keyPath[key] = true;
   ob.dep.notify();
@@ -1056,7 +1082,7 @@ function del (target, key) {
     return
   }
   if (!target.__keyPath) {
-    target.__keyPath = {};
+    def(target, '__keyPath', {}, false);
   }
   // Vue.del 删除对象属性，渲染时候把这个属性设置为 undefined
   target.__keyPath[key] = 'del';
@@ -4636,7 +4662,7 @@ Object.defineProperty(Vue$3.prototype, '$ssrContext', {
 });
 
 Vue$3.version = '2.4.1';
-Vue$3.mpvueVersion = '1.0.13';
+Vue$3.mpvueVersion = '2.0.6';
 
 /*  */
 

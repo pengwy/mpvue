@@ -330,6 +330,14 @@ export function createMP ({ mpType, init }) {
           callHook(this.rootVueVM, 'onShareAppMessage', options)
         }
       },
+      // 用户点击右上角分享
+      onShareTimeline (options) {
+        if (this.rootVueVM.$options.onShareTimeline) {
+          callHook(this.rootVueVM, 'onShareTimeline', options)
+        }
+      },
+
+
 
       // Do something when page scroll
       onPageScroll (options) {
